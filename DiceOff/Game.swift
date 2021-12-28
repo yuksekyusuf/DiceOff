@@ -23,6 +23,7 @@ class Game: ObservableObject {
     @Published var redScore = 0
     
     var changeList = [Dice]()
+    private var aiClosedList = [Dice]()
     
     init(rows: Int, columns: Int) {
         numRows = rows
@@ -132,11 +133,17 @@ class Game: ObservableObject {
     private func nextTurn() {
         if activePlayer == .green {
             activePlayer = .red
+            state = .thinking
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.executeAITurn()
+            }
             
         } else {
             activePlayer = .green
+            state = .waiting
         }
-        state = .waiting
+        
     }
     
     func increment(_ dice: Dice) {
@@ -162,4 +169,99 @@ class Game: ObservableObject {
         return count
     }
     
+    private func checkMove(for dice: Dice){
+        if aiClosedList.contains(dice) { return }
+        aiClosedList.append(dice)
+        
+        
+        if dice.value + 1 > dice.neighbors {
+            for neighbor in getNeighbors(row: dice.row, col: dice.column) {
+                checkMove(for: neighbor)
+            }
+        }
+    }
+    
+    private func getBestMove() -> Dice? {
+        let aiPlayer = Player.red
+        var bestDice = [Dice]()
+        var bestScore = -9999
+        
+        //more code to come
+        for row in rows {
+            for dice in row {
+                if dice.owner != .none && dice.owner != aiPlayer {
+                    continue
+                }
+                aiClosedList.removeAll()
+                checkMove(for: dice)
+                
+                //Is this a good move?
+                var score = 0
+                
+                for checkDice in aiClosedList {
+                    if checkDice.owner == .none || checkDice.owner == aiPlayer {
+                        score += 1
+                    } else {
+                        score += 10
+                    }
+                }
+                
+                //More code to come
+                let compareList = getNeighbors(row: dice.row, col: dice.column)
+                
+                for checkDice in compareList {
+                    if checkDice.owner == aiPlayer { continue }
+                    if checkDice.value > dice.value {
+                        score -= 50
+                    } else {
+                        if checkDice.owner != .none {
+                            score += 10
+                        }
+                    }
+                }
+                
+                //Still more code to come
+                if score > bestScore {
+                    bestScore = score
+                    bestDice.removeAll()
+                    bestDice.append(dice)
+                } else if score == bestScore {
+                    bestDice.append(dice)
+                }
+            }
+        }
+        
+        if bestDice.isEmpty {
+            return nil
+        }
+        
+        if Bool.random() {
+            var highestValue = 0
+            var selection = [Dice]()
+            
+            for dice in bestDice {
+                if dice.value > highestValue {
+                    highestValue = dice.value
+                    selection.removeAll()
+                    selection.append(dice)
+                } else if dice.value == highestValue {
+                    selection.append(dice)
+                }
+            }
+            
+            return selection.randomElement()
+        } else {
+            return bestDice.randomElement()
+        }
+    }
+    
+    private func executeAITurn() {
+        if let dice = getBestMove() {
+            changeList.append(dice)
+            state = .changing
+            runChanges()
+        } else {
+            print("no moves!")
+        }
+    }
 }
